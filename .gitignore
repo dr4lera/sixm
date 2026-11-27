@@ -1,0 +1,9 @@
+.build/
+*.app/
+.DS_Store
+*.rpf
+*.exe
+*.dll
+*.pkg
+*.xvd
+local-dump-*.json
