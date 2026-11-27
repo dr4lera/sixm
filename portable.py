@@ -65,6 +65,7 @@ def main():
     token = secrets.token_urlsafe(32)
     bridge = '''<script>
     window.send = async function(action, extra={}) {
+      if(action==='server'){const url=new URL(extra.url);if(!['http:','https:'].includes(url.protocol)||url.username||url.password){alert('Enter an HTTP or HTTPS server URL.');return;}window.open(url.href,'_blank','noopener');return;}
       if(action==='recover'||action==='recoverCell'||action==='cancelImport'){alert('Automated model conversion currently requires the native Mac build with SixNG bundled. Windows launcher inspection is available.');return;}
       if(action==='model'){alert('Static GLB preview currently requires the native Mac app. Windows rendering is not implemented yet.');return;}
       if(action==='sandbox'){alert('This renderer test currently requires the native Mac app. Windows gameplay is not implemented yet.');return;}

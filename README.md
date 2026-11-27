@@ -1,94 +1,58 @@
 # Sixm
 
-An independent native Apple Silicon sandbox prototype with a Vice City-inspired, browser-style launcher. Bring your own local extracted Xbox dump. No game executable, assets, keys, or recovered proprietary source are bundled.
+A Windows/macOS multiplayer framework preview with a Vice City-inspired client. **Original-game reconstruction is paused pending an official PC version.** This project is not a finished GTA VI port and does not include game content, a game engine source recovery, or FiveM runtime compatibility.
 
-## Current state
+## Downloads
 
-This is an early foundation, not a finished GTA VI port or a complete multiplayer client.
+Use [GitHub Releases](https://github.com/dr4lera/sixm/releases) for the Windows executables/ZIP and Apple Silicon Mac DMG. The release workflow builds on Windows and macOS, tests the outputs and publishes checksums. Releases are development previews; the Mac app is ad hoc signed and not notarized.
 
-- Native macOS launcher using WKWebView with local HTML; no hosted web service.
-- Read-only local dump inspection: PE signature, RPF9 archive headers, file/byte counts. Files remain in place.
-- Native procedural SceneKit street with walking, driving, four placeholder character presets, paint switching, and keyboard/gamepad input.
-- Fixed 60 Hz simulation, render interpolation, bounded catch-up after pauses, live FPS and p95 frame timing.
-- Simulation invariance tested at 30/60/120/144 rendered FPS.
+- Windows: `Sixm.exe` opens a server's browser client. `SixmServer.exe` hosts a server. Python is bundled in both executables.
+- macOS: drag `Sixm.app` from the DMG into Applications. The launcher can open the cross-platform browser client and includes experimental native static-asset tools.
+- Rendering uses a WebGL 2 browser. No original assets or extractor are included in release packages.
 
-**Not implemented:** complete RPF9 directory decoding, skeleton/animation/collision import, GTA map streaming, original physics/AI/missions, network synchronization, server scripting, persistence, and a complete customization system. Supported static models and placements can be recovered through the separately built SixNG helper.
+## Server and resources
 
-The archive inspector does not claim archive integrity or authenticity from a header. A local dump is not automatically recovered engine source. A 60 Hz simulation does not guarantee 60 rendered FPS with game content.
-
-## Build
-
-Requires Apple Silicon, macOS 14+, and Xcode Command Line Tools with the macOS SDK. No third-party packages.
+The server owns movement at 60 Hz and sends snapshots at 20 Hz. The browser interpolates player positions. Operators control maps, static assets, shader programs, feature switches and custom resources. See [the resource API](multiplayer/README.md).
 
 ```sh
-sh build.sh
-open Sixm.app
+python3 -B multiplayer/server.py --port 6020
+# Open http://127.0.0.1:6020
+```
+
+For custom maps:
+
+```sh
+python3 -B multiplayer/server.py --maps /path/to/maps --map your-map
+```
+
+Server resources are trusted Python code; client resources are browser JavaScript with WebGL access. Editable GLSL shader examples and two clearly labelled authored test maps are included. Imported GLB/cell scenes are static; animation, original materials, missions, game physics, imported mesh collision and full world streaming remain unfinished.
+
+## Build releases
+
+Run **Actions → Build and release Sixm → Run workflow** and provide a preview tag such as `v0.2.0-preview`, or push a `v*` tag. The workflow builds Windows client/server EXEs and a Mac DMG, runs tests, and attaches the outputs and `SHA256SUMS.txt` to a prerelease. It uses the repository's normal Actions token; no personal token or signing identity is stored.
+
+Local platform builds:
+
+```powershell
+# Windows, Python 3.12
+./packaging/build_windows.ps1
 ```
 
 ```sh
-./Sixm.app/Contents/MacOS/Sixm --self-test
-./Sixm.app/Contents/MacOS/Sixm --inspect '/path/to/extracted/Xbox-dump'
-./Sixm.app/Contents/MacOS/Sixm --smoke-render --report /tmp/sixm-render.json
+# Apple Silicon Mac, Xcode Command Line Tools
+sh packaging/build_macos.sh
 ```
 
-For a different app output location, set `SIXM_OUTPUT` when building. The local build is ad hoc signed for development, not notarized for distribution.
+## Native Mac experiments
 
-## Prototype controls
+`sh build.sh` builds the native launcher and SceneKit test tools. `Sixm --self-test` checks fixed-step simulation and importer limits. Static GLB and bounded cell import can be verified using `--validate-glb`, `--validate-cell`, or `--snapshot-preview ... --snapshot-output ...`.
 
-W/S: forward/reverse. A/D: turn. E: enter/exit the placeholder car. C: cycle character presets. V: cycle paint. Gamepad: left stick for movement, triggers for throttle/brake, south face button to enter/exit. Character and vehicle changes are temporary.
+The optional separately built [SixNG](https://github.com/holdmysocks/SixNG) helper can be included with `SIXNG_BIN` and `SIXNG_SOURCE`. Its license/notices and source identity are included when bundled. It is not included in the default release workflow. Dump inspection is read-only; converted content stays local. A small local recovered-asset scene was displayed during development; it is not part of this repository or proof of complete game recovery.
 
-## Next milestones
+## Tests
 
-1. A bounded, validated RPF9 directory reader and inventory. Establish compression and resource versions before exporting anything.
-2. Convert one mesh/material with an asset provenance manifest; validate skeleton and animation separately.
-3. One streamed test cell with measured CPU/GPU/memory budgets.
-4. Authoritative server and two-client movement before adding persistence and server resources.
-5. Extend to distinct characters, outfits, vehicles and customization. Full-map support depends on the streaming importer; it is not implemented yet.
+```sh
+python3 -B -m unittest discover -s multiplayer/tests -v
+```
 
-Untrusted archives should be parsed with bounded lengths and offsets. Keep local dumps and derived content out of this source repository.
-
-## Windows launcher
-
-Install Python 3.9+ from python.org, then run `Launch-Windows.cmd` (or `python portable.py`). This opens the same launcher in your browser and supports read-only local dump inspection. It binds only to loopback and validates API tokens and origins. The SceneKit renderer prototype is Mac-only; Windows gameplay and real-asset rendering are not implemented or tested.
-
-## Real asset preview
-
-The Mac app can open a locally converted glTF 2.0 GLB using **Open real asset preview**. It loads static triangle meshes, node transforms, normals, UVs, base-colour textures and basic metallic/roughness factors. Skins, animations, morph targets, specialized game materials, physics and gameplay are not reproduced. External textures remain constrained to the model folder, or the nearest ancestor containing a SixNG `manifest.jsonl`.
-
-A local validation recovered and displayed `phoenix_mid` from `levels.rpf` with 73,431 vertices and 69,276 triangles using SixNG at commit `47250388a583222025d418addf5e32b2f3a6ec18`. No exported content is included here. SixNG is GPL-3.0-only; use its upstream source and notices if distributing that separate tool.
-
-[SixNG upstream](https://github.com/holdmysocks/SixNG) provides local archive carving and conversion. Mac development builds can bundle a separately built helper as described below. Archive carving is not a complete decrypted directory listing.
-
-## Recovery status
-
-A local investigation indexed 523,524 carving entries in `levels.rpf` and 80,406 in `packs.rpf`. These are recovery indexes, not proof of complete archive coverage. `script.rpf` yielded 1,012 XML-like script-data documents. The story script container yielded 2,309 other PSO resources and no documents accepted by that decoder. Script configuration data is not decompiled executable script code.
-
-REA identified the original executable as x86-64 PE. A workspace-local Ghidra provider is installed. Whole-executable analysis has timed out; two bounded native functions produced generated pseudocode with the Windows calling convention verified; external code/data are absent. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
-
-The fidelity target is to preserve original recovered assets and data, with custom features in an isolated resource/server layer. Full map streaming, original behavior, distinct player characters, customization, and multiplayer remain development goals.
-
-## Integrated Mac import
-
-The Mac launcher can optionally bundle the separately built SixNG CLI. Set `SIXNG_BIN` to its native executable and `SIXNG_SOURCE` to the matching source checkout when running `build.sh`; the app includes its license, notices, source URL and commit. The source repository includes no game files or extractor binary.
-
-**Import & preview** asks for the local dump folder and a recovered model name (default `phoenix_mid`). It creates/resumes a world archive index, converts one supported drawable/fragment and available textures, then opens the static preview. Cache and outputs go to `~/Library/Application Support/Sixm/Imports/<local-path-hash>`, outside the original dump and app bundle. Cancel stops the helper and leaves resumable data in place.
-
-The same import path can be tested with `Sixm --recover-asset <dump> --asset-name phoenix_mid --asset-work <scratch-folder>`. Invalid model names and missing `levels.rpf` are rejected. This is not full-world conversion or gameplay. The Windows entry point still supports launcher/inspection only.
-
-## Bounded world-cell experiment
-
-`build_cell.py` selects a small world-space group from SixNG placement exports, converts a bounded number of unique model references, and writes `cell.json` with rebased glTF transforms and explicit limitations. It requires the separately built SixNG CLI. Use `--help` for required input paths; the default radius is 40 metres and the default model cap is six.
-
-The Mac asset picker also accepts a generated `cell.json`; `Sixm --validate-cell <cell.json>` validates its geometry without opening a window. Model paths are constrained to the cell folder, transforms must be finite, and manifests are limited to 2,048 instances. This is static assembly, not world streaming, physics, collision, gameplay or an interpreted LOD hierarchy.
-
-A local first sample imported 19 placed instances of three real barrier models, totaling 133,976 vertices and 101,005 triangles. Placement recovery found 2,250,722 entities across 30,789 files; those counts do not establish full rendered-map coverage.
-
-For repeatable visual verification without controlling an existing launcher window, run `Sixm --snapshot-preview <model.glb-or-cell.json> --snapshot-output <preview.png>`. This renders one 1280×800 frame with a fitted camera and default lighting. It is a geometry check, not an FPS or material-fidelity benchmark.
-
-## Launcher map-sample import
-
-**Import map sample** in the native Mac launcher now runs the regional placement export, selects a 40-metre cell, converts up to six unique models, writes a static manifest and opens its preview. It shares the model importer’s progress, cancellation and single-import guard. Successful regional exports are cached; a cancelled export is retried. The cache is separate from the dump.
-
-This first sample uses a fixed RAGE XY region (`-2420,-970,-2340,-890`) verified with the inspected dump version. It is not an arbitrary-location browser or full-map conversion. A local real-dump test recovered 13 regional placement files and assembled 19 placements of three models with zero conversion failures, using about 20 MB of cache. This verifies a static scene, not gameplay or a rendered FPS target. Missing conversions are recorded and reported; no scene is opened when every conversion fails.
-
-The same native pipeline is available as `Sixm --recover-cell <Xbox-folder> --asset-work <scratch-folder>`. Selection limits are 6 unique models, 2,048 instances, 32 MB per placement document and 50,000 placement files. Model names and archive IDs are validated before invoking the helper. Windows continues to show an explicit unsupported message for this native import path.
+The Windows build additionally executes the packaged client/server, checks bundled web resources and connects two test clients. Mac builds run native self-tests, verify the app signature and verify the DMG. Browser-reported frame timing from small static scenes is not a full-game benchmark.

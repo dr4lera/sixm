@@ -48,6 +48,10 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     }
     func userContentController(_ userContentController: WKUserContentController,didReceive message: WKScriptMessage) {
         guard let request = message.body as? [String:Any],let action = request["action"] as? String else {return}
+        if action == "server" {
+            guard let address=request["url"] as? String,address.count<=2048,let url=URL(string:address),["http","https"].contains(url.scheme?.lowercased() ?? ""),url.host != nil,url.user==nil,url.password==nil else {emit(["type":"error","message":"Enter an HTTP or HTTPS server client URL."]);return}
+            NSWorkspace.shared.open(url);return
+        }
         if action == "cancelImport" {importer?.cancel();return}
         if action == "recover" || action == "recoverCell" {
             let name:String? = action == "recoverCell" ? nil : (request["name"] as? String ?? "phoenix_mid")
