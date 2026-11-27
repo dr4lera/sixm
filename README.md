@@ -1,6 +1,6 @@
 # Sixm
 
-A Windows/macOS multiplayer framework preview with a Vice City-inspired client. **Original-game reconstruction is paused pending an official PC version.** This project is not a finished GTA VI port and does not include game content, a game engine source recovery, or FiveM runtime compatibility.
+A Windows/macOS multiplayer framework preview with a Vice City-inspired client. **Original-game reconstruction is paused pending an official PC version.** This project is not a finished GTA VI port and does not include game content, a game engine source recovery, or FiveM runtime compatibility, but  is a framework similar to it in preparation for the release of the pc story mode release.
 
 ## Downloads
 
