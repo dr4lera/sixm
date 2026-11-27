@@ -46,3 +46,7 @@ W/S: forward/reverse. A/D: turn. E: enter/exit the placeholder car. C: cycle cha
 5. Extend to distinct characters, outfits, vehicles and customization. Full-map support depends on the streaming importer; it is not implemented yet.
 
 Untrusted archives should be parsed with bounded lengths and offsets. Keep local dumps and derived content out of this source repository.
+
+## Windows launcher
+
+Install Python 3.9+ from python.org, then run `Launch-Windows.cmd` (or `python portable.py`). This opens the same launcher in your browser and supports read-only local dump inspection. It binds only to loopback and validates API tokens and origins. The SceneKit renderer prototype is Mac-only; Windows gameplay and real-asset rendering are not implemented or tested.
