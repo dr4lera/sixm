@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser.add_argument('url', nargs='?')
     parser.add_argument('--check-url', action='store_true', help='Validate the URL without opening a browser.')
     args = parser.parse_args()
-    address = args.url or input('Server HTTP URL [http://127.0.0.1:6022]: ').strip() or 'http://127.0.0.1:6022'
+    address = args.url or input('Server HTTP URL [http://127.0.0.1:6020]: ').strip() or 'http://127.0.0.1:6020'
     url = urllib.parse.urlsplit(address)
     if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password:
         parser.error('Enter an HTTP or HTTPS server URL, without credentials.')
