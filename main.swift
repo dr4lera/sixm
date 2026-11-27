@@ -7,6 +7,8 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     var web: WKWebView!
     var sandboxes: [Sandbox] = []
     var modelWindows: [NSWindow] = []
+    var dump: URL?
+    var importer: AssetImporter?
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu();let appItem = NSMenuItem();menu.addItem(appItem);let appMenu = NSMenu();appMenu.addItem(withTitle:"Quit Sixm",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q");appItem.submenu = appMenu;NSApp.mainMenu = menu
         if CommandLine.arguments.contains("--smoke-render") {
@@ -28,6 +30,15 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     }
     func userContentController(_ userContentController: WKUserContentController,didReceive message: WKScriptMessage) {
         guard let request = message.body as? [String:Any],let action = request["action"] as? String else {return}
+        if action == "cancelImport" {importer?.cancel();return}
+        if action == "recover" {
+            let name=request["name"] as? String ?? "phoenix_mid"
+            if let dump {recover(dump,model:name)} else {
+                let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.message="Select the Xbox archive folder containing levels.rpf. The original archives remain unchanged."
+                panel.beginSheetModal(for:window) { [weak self] response in if response == .OK,let url=panel.url {self?.dump=url;self?.recover(url,model:name)} }
+            }
+            return
+        }
         if action == "sandbox" {let sandbox = Sandbox();sandboxes.append(sandbox);sandbox.open()}
         if action == "model" {
             let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=false;panel.message="Choose a locally converted GLB. Static geometry/material preview; animation and gameplay are not imported."
@@ -42,6 +53,18 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         }
         if action == "inspect",let root = request["path"] as? String {inspect(URL(fileURLWithPath:root))}
     }
+    func recover(_ dump:URL,model:String) {
+        guard importer==nil else {emit(["type":"error","message":"An import is already running."]);return}
+        guard let helper=Bundle.main.url(forResource:"sixng",withExtension:nil,subdirectory:"tools") else {emit(["type":"error","message":"This build has no SixNG extractor. Use a build with the separate extractor bundled, or open an already converted GLB."]);return}
+        let task=AssetImporter(helper:helper,workspace:AssetImporter.cacheFolder(dump:dump));importer=task
+        emit(["type":"importProgress","message":"Starting local asset import…"])
+        DispatchQueue.global(qos:.userInitiated).async { [weak self] in
+            do {
+                let glb=try task.recover(dump:dump,model:model) {message in DispatchQueue.main.async {self?.emit(["type":"importProgress","message":message])}}
+                DispatchQueue.main.async {self?.importer=nil;self?.emit(["type":"importDone","message":"Imported \(model). Opening static preview."]);self?.preview(glb)}
+            } catch {DispatchQueue.main.async {self?.importer=nil;self?.emit(["type":"error","message":error.localizedDescription])}}
+        }
+    }
     func preview(_ url: URL) {
         do {
             let (scene,vertices,triangles) = try GLB.load(url)
@@ -51,6 +74,7 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         } catch {emit(["type":"error","message":error.localizedDescription])}
     }
     func inspect(_ url: URL) {
+        dump=url
         emit(["type":"scanning"])
         DispatchQueue.global(qos:.userInitiated).async { [weak self] in
             do {
@@ -65,6 +89,7 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         guard let url = navigationAction.request.url else {decisionHandler(.cancel);return}
         decisionHandler(url.isFileURL || url.absoluteString == "about:blank" ? .allow : .cancel)
     }
+    func applicationWillTerminate(_ notification:Notification) {importer?.cancel()}
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool {true}
 }
 
@@ -88,6 +113,17 @@ func selfTest() throws {
     print("PASS: fixed-step invariance at 30/60/120/144 FPS; pause catch-up bound; RPF9 header recognition; truncated archive handling; missing executable handling.")
 }
 
+if let i=CommandLine.arguments.firstIndex(of:"--recover-asset"),i+1<CommandLine.arguments.count {
+    do {
+        func value(_ flag:String)->String? {guard let at=CommandLine.arguments.firstIndex(of:flag),at+1<CommandLine.arguments.count else {return nil};return CommandLine.arguments[at+1]}
+        let dump=URL(fileURLWithPath:CommandLine.arguments[i+1])
+        guard let helper=Bundle.main.url(forResource:"sixng",withExtension:nil,subdirectory:"tools") else {throw GLB.failure("SixNG helper is not bundled.")}
+        let workspace=value("--asset-work").map{URL(fileURLWithPath:$0)} ?? AssetImporter.cacheFolder(dump:dump)
+        let job=AssetImporter(helper:helper,workspace:workspace)
+        let glb=try job.recover(dump:dump,model:value("--asset-name") ?? "phoenix_mid") {message in fputs(message+"\n",stderr)}
+        print(glb.path);exit(0)
+    } catch {fputs("Import failed: \(error.localizedDescription)\n",stderr);exit(1)}
+}
 if CommandLine.arguments.contains("--self-test") {
     do {try selfTest();exit(0)} catch {fputs("Tests failed: \(error)\n",stderr);exit(1)}
 }

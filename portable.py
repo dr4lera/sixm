@@ -65,6 +65,7 @@ def main():
     token = secrets.token_urlsafe(32)
     bridge = '''<script>
     window.send = async function(action, extra={}) {
+      if(action==='recover'||action==='cancelImport'){alert('Automated model conversion currently requires the native Mac build with SixNG bundled. Windows launcher inspection is available.');return;}
       if(action==='model'){alert('Static GLB preview currently requires the native Mac app. Windows rendering is not implemented yet.');return;}
       if(action==='sandbox'){alert('This renderer test currently requires the native Mac app. Windows gameplay is not implemented yet.');return;}
       if(action==='import'){const path=prompt('Path to your extracted Xbox dump folder:');if(!path)return;extra={path};action='inspect';}

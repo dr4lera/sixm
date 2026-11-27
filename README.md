@@ -66,3 +66,11 @@ A local investigation indexed 523,524 carving entries in `levels.rpf` and 80,406
 REA identified the original executable as x86-64 PE. Native decompilation is currently blocked by missing/unconfigured providers. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
 
 The fidelity target is to preserve original recovered assets and data, with custom features in an isolated resource/server layer. Full map streaming, original behavior, distinct player characters, customization, and multiplayer remain development goals.
+
+## Integrated Mac import
+
+The Mac launcher can optionally bundle the separately built SixNG CLI. Set `SIXNG_BIN` to its native executable and `SIXNG_SOURCE` to the matching source checkout when running `build.sh`; the app includes its license, notices, source URL and commit. The source repository includes no game files or extractor binary.
+
+**Import & preview** asks for the local dump folder and a recovered model name (default `phoenix_mid`). It creates/resumes a world archive index, converts one supported drawable/fragment and available textures, then opens the static preview. Cache and outputs go to `~/Library/Application Support/Sixm/Imports/<local-path-hash>`, outside the original dump and app bundle. Cancel stops the helper and leaves resumable data in place.
+
+The same import path can be tested with `Sixm --recover-asset <dump> --asset-name phoenix_mid --asset-work <scratch-folder>`. Invalid model names and missing `levels.rpf` are rejected. This is not full-world conversion or gameplay. The Windows entry point still supports launcher/inspection only.
