@@ -1,10 +1,12 @@
 import Cocoa
 import WebKit
+import SceneKit
 
 final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var sandboxes: [Sandbox] = []
+    var modelWindows: [NSWindow] = []
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu();let appItem = NSMenuItem();menu.addItem(appItem);let appMenu = NSMenu();appMenu.addItem(withTitle:"Quit Sixm",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q");appItem.submenu = appMenu;NSApp.mainMenu = menu
         if CommandLine.arguments.contains("--smoke-render") {
@@ -16,6 +18,7 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         web = WKWebView(frame:.zero,configuration:config);web.navigationDelegate = self
         window = NSWindow(contentRect:NSRect(x:0,y:0,width:1240,height:820),styleMask:[.titled,.closable,.miniaturizable,.resizable,.fullSizeContentView],backing:.buffered,defer:false)
         window.title = "Sixm";window.titlebarAppearsTransparent = true;window.titleVisibility = .hidden;window.backgroundColor = NSColor(calibratedRed:0.035,green:0.045,blue:0.09,alpha:1);window.minSize = NSSize(width:960,height:690);window.contentView = web
+        if let i=CommandLine.arguments.firstIndex(of:"--preview-glb"),i+1<CommandLine.arguments.count {DispatchQueue.main.async {self.preview(URL(fileURLWithPath:CommandLine.arguments[i+1]))}}
         if let html = Bundle.main.url(forResource:"index",withExtension:"html") {web.loadFileURL(html,allowingReadAccessTo:html.deletingLastPathComponent())}
         window.center();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
     }
@@ -26,6 +29,10 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     func userContentController(_ userContentController: WKUserContentController,didReceive message: WKScriptMessage) {
         guard let request = message.body as? [String:Any],let action = request["action"] as? String else {return}
         if action == "sandbox" {let sandbox = Sandbox();sandboxes.append(sandbox);sandbox.open()}
+        if action == "model" {
+            let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=false;panel.message="Choose a locally converted GLB. Static geometry/material preview; animation and gameplay are not imported."
+            panel.beginSheetModal(for:window) { [weak self] response in if response == .OK,let url=panel.url {self?.preview(url)} }
+        }
         if action == "import" {
             let panel = NSOpenPanel();panel.canChooseDirectories = true;panel.canChooseFiles = false;panel.allowsMultipleSelection = false;panel.message = "Choose your extracted Xbox dump. Sixm reads headers only; your files stay in place."
             panel.beginSheetModal(for:window) { [weak self] response in
@@ -34,6 +41,14 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
             }
         }
         if action == "inspect",let root = request["path"] as? String {inspect(URL(fileURLWithPath:root))}
+    }
+    func preview(_ url: URL) {
+        do {
+            let (scene,vertices,triangles) = try GLB.load(url)
+            let view = SCNView();view.scene=scene;view.allowsCameraControl=true;view.autoenablesDefaultLighting=true;view.backgroundColor=NSColor(calibratedWhite:0.08,alpha:1);view.preferredFramesPerSecond=60
+            let w=NSWindow(contentRect:NSRect(x:0,y:0,width:1000,height:700),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false)
+            w.title="Sixm · \(url.lastPathComponent) · \(vertices) vertices / \(triangles) triangles · static mesh preview";w.contentView=view;modelWindows.append(w);w.center();w.makeKeyAndOrderFront(nil)
+        } catch {emit(["type":"error","message":error.localizedDescription])}
     }
     func inspect(_ url: URL) {
         emit(["type":"scanning"])
@@ -75,6 +90,9 @@ func selfTest() throws {
 
 if CommandLine.arguments.contains("--self-test") {
     do {try selfTest();exit(0)} catch {fputs("Tests failed: \(error)\n",stderr);exit(1)}
+}
+if let i=CommandLine.arguments.firstIndex(of:"--validate-glb"),i+1<CommandLine.arguments.count {
+    do {let (_,vertices,triangles)=try GLB.load(URL(fileURLWithPath:CommandLine.arguments[i+1]));print("GLB_VALID vertices=\(vertices) triangles=\(triangles)");exit(0)} catch {fputs("GLB invalid: \(error.localizedDescription)\n",stderr);exit(1)}
 }
 if let i = CommandLine.arguments.firstIndex(of:"--inspect"),i+1<CommandLine.arguments.count {
     do {let report = try DumpInventory.scan(URL(fileURLWithPath:CommandLine.arguments[i+1]));let encoder = JSONEncoder();encoder.outputFormatting = [.prettyPrinted,.sortedKeys];let data = try encoder.encode(report);FileHandle.standardOutput.write(data);print("");exit(0)} catch {fputs("Inspection failed: \(error.localizedDescription)\n",stderr);exit(1)}

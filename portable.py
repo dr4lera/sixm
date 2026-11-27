@@ -65,6 +65,7 @@ def main():
     token = secrets.token_urlsafe(32)
     bridge = '''<script>
     window.send = async function(action, extra={}) {
+      if(action==='model'){alert('Static GLB preview currently requires the native Mac app. Windows rendering is not implemented yet.');return;}
       if(action==='sandbox'){alert('This renderer test currently requires the native Mac app. Windows gameplay is not implemented yet.');return;}
       if(action==='import'){const path=prompt('Path to your extracted Xbox dump folder:');if(!path)return;extra={path};action='inspect';}
       try{window.receive({type:'scanning'});const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json','X-Sixm-Token':TOKEN},body:JSON.stringify({action,...extra})});window.receive(await response.json());}

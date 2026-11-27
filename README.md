@@ -50,3 +50,19 @@ Untrusted archives should be parsed with bounded lengths and offsets. Keep local
 ## Windows launcher
 
 Install Python 3.9+ from python.org, then run `Launch-Windows.cmd` (or `python portable.py`). This opens the same launcher in your browser and supports read-only local dump inspection. It binds only to loopback and validates API tokens and origins. The SceneKit renderer prototype is Mac-only; Windows gameplay and real-asset rendering are not implemented or tested.
+
+## Real asset preview
+
+The Mac app can open a locally converted glTF 2.0 GLB using **Open real asset preview**. It loads static triangle meshes, node transforms, normals, UVs, base-colour textures and basic metallic/roughness factors. Skins, animations, morph targets, specialized game materials, physics and gameplay are not reproduced. External textures remain constrained to the model folder, or the nearest ancestor containing a SixNG `manifest.jsonl`.
+
+A local validation recovered and displayed `phoenix_mid` from `levels.rpf` with 73,431 vertices and 69,276 triangles using SixNG at commit `47250388a583222025d418addf5e32b2f3a6ec18`. No exported content is included here. SixNG is GPL-3.0-only; use its upstream source and notices if distributing that separate tool.
+
+[SixNG upstream](https://github.com/holdmysocks/SixNG) provides local archive carving and conversion. Sixm does not bundle it or automate its install yet. Archive carving is not a complete decrypted directory listing.
+
+## Recovery status
+
+A local investigation indexed 523,524 carving entries in `levels.rpf` and 80,406 in `packs.rpf`. These are recovery indexes, not proof of complete archive coverage. `script.rpf` yielded 1,012 XML-like script-data documents. The story script container yielded 2,309 other PSO resources and no documents accepted by that decoder. Script configuration data is not decompiled executable script code.
+
+REA identified the original executable as x86-64 PE. Native decompilation is currently blocked by missing/unconfigured providers. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
+
+The fidelity target is to preserve original recovered assets and data, with custom features in an isolated resource/server layer. Full map streaming, original behavior, distinct player characters, customization, and multiplayer remain development goals.
