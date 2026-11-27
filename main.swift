@@ -2,6 +2,24 @@ import Cocoa
 import WebKit
 import SceneKit
 
+// Deterministic asset verification, independent of the active launcher window.
+func snapshotPreview(_ url:URL,to output:URL) throws {
+    _ = NSApplication.shared
+    let (scene,vertices,triangles)=try (url.pathExtension.lowercased()=="json" ? GLB.cell(url) : GLB.load(url))
+    let (low,high)=scene.rootNode.boundingBox
+    let center=SCNVector3((low.x+high.x)/2,(low.y+high.y)/2,(low.z+high.z)/2)
+    let extent=max(high.x-low.x,max(high.y-low.y,high.z-low.z))
+    guard extent.isFinite,extent>0 else {throw GLB.failure("Scene has no finite bounds.")}
+    let camera=SCNNode();camera.camera=SCNCamera();camera.camera?.zNear=Double(max(0.01,extent/1000));camera.camera?.zFar=Double(extent*10)
+    camera.position=SCNVector3(center.x+extent,center.y+extent*0.7,center.z+extent*1.3);camera.look(at:center);scene.rootNode.addChildNode(camera)
+    let renderer=SCNRenderer(device:nil,options:nil);renderer.scene=scene;renderer.pointOfView=camera;renderer.autoenablesDefaultLighting=true
+    scene.background.contents=NSColor(calibratedRed:0.035,green:0.045,blue:0.09,alpha:1)
+    let image=renderer.snapshot(atTime:0,with:CGSize(width:1280,height:800),antialiasingMode:.multisampling4X)
+    guard let tiff=image.tiffRepresentation,let bitmap=NSBitmapImageRep(data:tiff),let png=bitmap.representation(using:.png,properties:[:]) else {throw GLB.failure("Unable to encode preview.")}
+    try png.write(to:output,options:.atomic)
+    print("PREVIEW_RENDERED vertices=\(vertices) triangles=\(triangles) output=\(output.path)")
+}
+
 final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
@@ -41,7 +59,7 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         }
         if action == "sandbox" {let sandbox = Sandbox();sandboxes.append(sandbox);sandbox.open()}
         if action == "model" {
-            let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=false;panel.message="Choose a locally converted GLB. Static geometry/material preview; animation and gameplay are not imported."
+            let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=false;panel.message="Choose a locally converted GLB or cell.json. Static geometry only; gameplay is not imported."
             panel.beginSheetModal(for:window) { [weak self] response in if response == .OK,let url=panel.url {self?.preview(url)} }
         }
         if action == "import" {
@@ -67,7 +85,7 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     }
     func preview(_ url: URL) {
         do {
-            let (scene,vertices,triangles) = try GLB.load(url)
+            let (scene,vertices,triangles) = try (url.pathExtension.lowercased()=="json" ? GLB.cell(url) : GLB.load(url))
             let view = SCNView();view.scene=scene;view.allowsCameraControl=true;view.autoenablesDefaultLighting=true;view.backgroundColor=NSColor(calibratedWhite:0.08,alpha:1);view.preferredFramesPerSecond=60
             let w=NSWindow(contentRect:NSRect(x:0,y:0,width:1000,height:700),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false)
             w.title="Sixm · \(url.lastPathComponent) · \(vertices) vertices / \(triangles) triangles · static mesh preview";w.contentView=view;modelWindows.append(w);w.center();w.makeKeyAndOrderFront(nil)
@@ -126,6 +144,15 @@ if let i=CommandLine.arguments.firstIndex(of:"--recover-asset"),i+1<CommandLine.
 }
 if CommandLine.arguments.contains("--self-test") {
     do {try selfTest();exit(0)} catch {fputs("Tests failed: \(error)\n",stderr);exit(1)}
+}
+if let i=CommandLine.arguments.firstIndex(of:"--snapshot-preview"),i+1<CommandLine.arguments.count {
+    do {
+        guard let at=CommandLine.arguments.firstIndex(of:"--snapshot-output"),at+1<CommandLine.arguments.count else {throw GLB.failure("--snapshot-output <PNG path> is required.")}
+        try snapshotPreview(URL(fileURLWithPath:CommandLine.arguments[i+1]),to:URL(fileURLWithPath:CommandLine.arguments[at+1]));exit(0)
+    } catch {fputs("Preview failed: \(error.localizedDescription)\n",stderr);exit(1)}
+}
+if let i=CommandLine.arguments.firstIndex(of:"--validate-cell"),i+1<CommandLine.arguments.count {
+    do {let (_,v,t)=try GLB.cell(URL(fileURLWithPath:CommandLine.arguments[i+1]));print("CELL_VALID vertices=\(v) triangles=\(t)");exit(0)} catch {fputs("Cell invalid: \(error.localizedDescription)\n",stderr);exit(1)}
 }
 if let i=CommandLine.arguments.firstIndex(of:"--validate-glb"),i+1<CommandLine.arguments.count {
     do {let (_,vertices,triangles)=try GLB.load(URL(fileURLWithPath:CommandLine.arguments[i+1]));print("GLB_VALID vertices=\(vertices) triangles=\(triangles)");exit(0)} catch {fputs("GLB invalid: \(error.localizedDescription)\n",stderr);exit(1)}

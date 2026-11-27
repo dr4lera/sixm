@@ -4,6 +4,21 @@ import SceneKit
 // Static glTF 2.0 geometry preview. Not an animation, skinning or gameplay importer.
 enum GLB {
     static func failure(_ text: String) -> NSError {NSError(domain:"SixmGLB",code:1,userInfo:[NSLocalizedDescriptionKey:text])}
+    static func cell(_ url:URL) throws -> (SCNScene,Int,Int) {
+        let handle=try FileHandle(forReadingFrom:url);defer {try? handle.close()}
+        let data=try handle.read(upToCount:4*1024*1024+1) ?? Data();guard data.count<=4*1024*1024 else {throw failure("Cell manifest too large.")}
+        guard let doc=try JSONSerialization.jsonObject(with:data) as? [String:Any],doc["kind"] as? String == "sixm-static-cell",let instances=doc["instances"] as? [[String:Any]],instances.count<=2048 else {throw failure("Invalid or oversized static cell.")}
+        let base=url.deletingLastPathComponent().resolvingSymlinksInPath();let scene=SCNScene();var cached:[String:(SCNScene,Int,Int)]=[:];var vertices=0,triangles=0
+        for item in instances {
+            guard let model=item["model"] as? String,let t=item["translation"] as? [Double],let q=item["rotation"] as? [Double],let scale=item["scale"] as? [Double],t.count==3,q.count==4,scale.count==3,(t+q+scale).allSatisfy({$0.isFinite}) else {throw failure("Invalid cell transform.")}
+            let path=base.appendingPathComponent(model).standardizedFileURL.resolvingSymlinksInPath();guard path.path.hasPrefix(base.path+"/") else {throw failure("Model escapes cell folder.")}
+            let asset:(SCNScene,Int,Int)
+            if let known=cached[model] {asset=known} else {asset=try load(path);cached[model]=asset}
+            let node=asset.0.rootNode.clone();node.position=SCNVector3(t[0],t[1],t[2]);node.orientation=SCNQuaternion(q[0],q[1],q[2],q[3]);node.scale=SCNVector3(scale[0],scale[1],scale[2]);scene.rootNode.addChildNode(node);vertices+=asset.1;triangles+=asset.2
+        }
+        guard !instances.isEmpty else {throw failure("Cell contains no imported instances.")}
+        return (scene,vertices,triangles)
+    }
     static func load(_ url: URL) throws -> (SCNScene,Int,Int) {
         let data = try Data(contentsOf:url,options:.mappedIfSafe)
         guard data.count>=20,data.count<=256*1024*1024 else {throw failure("GLB must be between 20 bytes and 256 MB.")}

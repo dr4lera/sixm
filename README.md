@@ -57,13 +57,13 @@ The Mac app can open a locally converted glTF 2.0 GLB using **Open real asset pr
 
 A local validation recovered and displayed `phoenix_mid` from `levels.rpf` with 73,431 vertices and 69,276 triangles using SixNG at commit `47250388a583222025d418addf5e32b2f3a6ec18`. No exported content is included here. SixNG is GPL-3.0-only; use its upstream source and notices if distributing that separate tool.
 
-[SixNG upstream](https://github.com/holdmysocks/SixNG) provides local archive carving and conversion. Sixm does not bundle it or automate its install yet. Archive carving is not a complete decrypted directory listing.
+[SixNG upstream](https://github.com/holdmysocks/SixNG) provides local archive carving and conversion. Mac development builds can bundle a separately built helper as described below. Archive carving is not a complete decrypted directory listing.
 
 ## Recovery status
 
 A local investigation indexed 523,524 carving entries in `levels.rpf` and 80,406 in `packs.rpf`. These are recovery indexes, not proof of complete archive coverage. `script.rpf` yielded 1,012 XML-like script-data documents. The story script container yielded 2,309 other PSO resources and no documents accepted by that decoder. Script configuration data is not decompiled executable script code.
 
-REA identified the original executable as x86-64 PE. Native decompilation is currently blocked by missing/unconfigured providers. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
+REA identified the original executable as x86-64 PE. A workspace-local Ghidra provider is installed. Whole-executable analysis has timed out; a bounded native function produced provisional pseudocode, with calling-convention verification still in progress. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
 
 The fidelity target is to preserve original recovered assets and data, with custom features in an isolated resource/server layer. Full map streaming, original behavior, distinct player characters, customization, and multiplayer remain development goals.
 
@@ -74,3 +74,13 @@ The Mac launcher can optionally bundle the separately built SixNG CLI. Set `SIXN
 **Import & preview** asks for the local dump folder and a recovered model name (default `phoenix_mid`). It creates/resumes a world archive index, converts one supported drawable/fragment and available textures, then opens the static preview. Cache and outputs go to `~/Library/Application Support/Sixm/Imports/<local-path-hash>`, outside the original dump and app bundle. Cancel stops the helper and leaves resumable data in place.
 
 The same import path can be tested with `Sixm --recover-asset <dump> --asset-name phoenix_mid --asset-work <scratch-folder>`. Invalid model names and missing `levels.rpf` are rejected. This is not full-world conversion or gameplay. The Windows entry point still supports launcher/inspection only.
+
+## Bounded world-cell experiment
+
+`build_cell.py` selects a small world-space group from SixNG placement exports, converts a bounded number of unique model references, and writes `cell.json` with rebased glTF transforms and explicit limitations. It requires the separately built SixNG CLI. Use `--help` for required input paths; the default radius is 40 metres and the default model cap is six.
+
+The Mac asset picker also accepts a generated `cell.json`; `Sixm --validate-cell <cell.json>` validates its geometry without opening a window. Model paths are constrained to the cell folder, transforms must be finite, and manifests are limited to 2,048 instances. This is static assembly, not world streaming, physics, collision, gameplay or an interpreted LOD hierarchy.
+
+A local first sample imported 19 placed instances of three real barrier models, totaling 133,976 vertices and 101,005 triangles. Placement recovery found 2,250,722 entities across 30,789 files; those counts do not establish full rendered-map coverage.
+
+For repeatable visual verification without controlling an existing launcher window, run `Sixm --snapshot-preview <model.glb-or-cell.json> --snapshot-output <preview.png>`. This renders one 1280×800 frame with a fitted camera and default lighting. It is a geometry check, not an FPS or material-fidelity benchmark.
