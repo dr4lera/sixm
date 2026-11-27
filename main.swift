@@ -49,8 +49,8 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     func userContentController(_ userContentController: WKUserContentController,didReceive message: WKScriptMessage) {
         guard let request = message.body as? [String:Any],let action = request["action"] as? String else {return}
         if action == "cancelImport" {importer?.cancel();return}
-        if action == "recover" {
-            let name=request["name"] as? String ?? "phoenix_mid"
+        if action == "recover" || action == "recoverCell" {
+            let name:String? = action == "recoverCell" ? nil : (request["name"] as? String ?? "phoenix_mid")
             if let dump {recover(dump,model:name)} else {
                 let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.message="Select the Xbox archive folder containing levels.rpf. The original archives remain unchanged."
                 panel.beginSheetModal(for:window) { [weak self] response in if response == .OK,let url=panel.url {self?.dump=url;self?.recover(url,model:name)} }
@@ -71,15 +71,23 @@ final class Launcher: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
         }
         if action == "inspect",let root = request["path"] as? String {inspect(URL(fileURLWithPath:root))}
     }
-    func recover(_ dump:URL,model:String) {
+    func recover(_ dump:URL,model:String?) {
         guard importer==nil else {emit(["type":"error","message":"An import is already running."]);return}
         guard let helper=Bundle.main.url(forResource:"sixng",withExtension:nil,subdirectory:"tools") else {emit(["type":"error","message":"This build has no SixNG extractor. Use a build with the separate extractor bundled, or open an already converted GLB."]);return}
         let task=AssetImporter(helper:helper,workspace:AssetImporter.cacheFolder(dump:dump));importer=task
         emit(["type":"importProgress","message":"Starting local asset import…"])
         DispatchQueue.global(qos:.userInitiated).async { [weak self] in
             do {
-                let glb=try task.recover(dump:dump,model:model) {message in DispatchQueue.main.async {self?.emit(["type":"importProgress","message":message])}}
-                DispatchQueue.main.async {self?.importer=nil;self?.emit(["type":"importDone","message":"Imported \(model). Opening static preview."]);self?.preview(glb)}
+                let progress:(String)->Void = {message in DispatchQueue.main.async {self?.emit(["type":"importProgress","message":message])}}
+                let glb:URL
+                if let model {glb=try task.recover(dump:dump,model:model,status:progress)} else {glb=try task.recoverCell(dump:dump,status:progress)}
+                var completion="Imported \(model ?? "map sample"). Opening static preview."
+                if model==nil,let data=try? Data(contentsOf:glb),let result=try? JSONSerialization.jsonObject(with:data) as? [String:Any] {
+                    let placed=(result["instances"] as? [Any])?.count ?? 0,missing=(result["failed_models"] as? [String])?.count ?? 0
+                    completion="Imported \(placed) placements; \(missing) unsupported models. Opening static preview."
+                }
+                let message=completion
+                DispatchQueue.main.async {self?.importer=nil;self?.emit(["type":"importDone","message":message]);self?.preview(glb)}
             } catch {DispatchQueue.main.async {self?.importer=nil;self?.emit(["type":"error","message":error.localizedDescription])}}
         }
     }
@@ -128,17 +136,33 @@ func selfTest() throws {
     try Data([0x39]).write(to:directory.appendingPathComponent("bad.rpf"))
     let inventory = try DumpInventory.scan(directory)
     guard inventory.archives.count == 2,inventory.archives.contains(where:{$0.magic == "RPF9"}),!inventory.warnings.isEmpty,!inventory.executablePresent else {throw NSError(domain:"SixmTests",code:4)}
-    print("PASS: fixed-step invariance at 30/60/120/144 FPS; pause catch-up bound; RPF9 header recognition; truncated archive handling; missing executable handling.")
+    let placements=directory.appendingPathComponent("placements")
+    try FileManager.default.createDirectory(at:placements,withIntermediateDirectories:true)
+    let entities:[[String:Any]]=(0..<4000).map {i in ["name":"fixture_\(i%10)","model_id":"levels.rpf@\(i%10)","gltf":["translation":[-2380.0,4.0,925.0],"rotation":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]]]}
+    let fixture=placements.appendingPathComponent("map.json")
+    try JSONSerialization.data(withJSONObject:["space":"world","entities":entities]).write(to:fixture)
+    let selection=try WorldCell.select(placements,checkCancelled:{})
+    guard selection.entities.count==2048,Set(selection.entities.compactMap{$0.model_id}).count==6 else {throw NSError(domain:"SixmTests",code:5)}
+    var cancelled=false
+    do {_=try WorldCell.select(placements,checkCancelled:{throw GLB.failure("test cancellation")})} catch {cancelled=error.localizedDescription=="test cancellation"}
+    guard cancelled else {throw NSError(domain:"SixmTests",code:6)}
+    let manifest=try WorldCell.write(selection,models:["levels.rpf@0":"models/fixture.glb"],failures:["levels.rpf@1"],to:directory)
+    let doc=try JSONSerialization.jsonObject(with:Data(contentsOf:manifest)) as! [String:Any]
+    let instances=doc["instances"] as! [[String:Any]]
+    guard instances.count>0,instances.count<selection.entities.count,instances.allSatisfy({($0["translation"] as? [Double])==[0,0,0]}),(doc["failed_models"] as? [String])==["levels.rpf@1"] else {throw NSError(domain:"SixmTests",code:7)}
+    print("PASS: fixed-step invariance at 30/60/120/144 FPS; pause catch-up bound; archive inspection; cell model/instance budgets, cancellation, rebasing and partial conversion reporting.")
 }
 
-if let i=CommandLine.arguments.firstIndex(of:"--recover-asset"),i+1<CommandLine.arguments.count {
+if let i=CommandLine.arguments.firstIndex(where:{$0=="--recover-asset" || $0=="--recover-cell"}),i+1<CommandLine.arguments.count {
     do {
         func value(_ flag:String)->String? {guard let at=CommandLine.arguments.firstIndex(of:flag),at+1<CommandLine.arguments.count else {return nil};return CommandLine.arguments[at+1]}
         let dump=URL(fileURLWithPath:CommandLine.arguments[i+1])
         guard let helper=Bundle.main.url(forResource:"sixng",withExtension:nil,subdirectory:"tools") else {throw GLB.failure("SixNG helper is not bundled.")}
         let workspace=value("--asset-work").map{URL(fileURLWithPath:$0)} ?? AssetImporter.cacheFolder(dump:dump)
         let job=AssetImporter(helper:helper,workspace:workspace)
-        let glb=try job.recover(dump:dump,model:value("--asset-name") ?? "phoenix_mid") {message in fputs(message+"\n",stderr)}
+        let progress:(String)->Void = {message in fputs(message+"\n",stderr)}
+        let glb:URL
+        if CommandLine.arguments[i]=="--recover-cell" {glb=try job.recoverCell(dump:dump,status:progress)} else {glb=try job.recover(dump:dump,model:value("--asset-name") ?? "phoenix_mid",status:progress)}
         print(glb.path);exit(0)
     } catch {fputs("Import failed: \(error.localizedDescription)\n",stderr);exit(1)}
 }

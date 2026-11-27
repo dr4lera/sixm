@@ -12,7 +12,7 @@ This is an early foundation, not a finished GTA VI port or a complete multiplaye
 - Fixed 60 Hz simulation, render interpolation, bounded catch-up after pauses, live FPS and p95 frame timing.
 - Simulation invariance tested at 30/60/120/144 rendered FPS.
 
-**Not implemented:** RPF9 directory decoding or extraction, conversion of models/materials/skeletons/animations/collisions, GTA map streaming, original physics/AI/missions, network synchronization, server scripting, persistence, and a complete customization system.
+**Not implemented:** complete RPF9 directory decoding, skeleton/animation/collision import, GTA map streaming, original physics/AI/missions, network synchronization, server scripting, persistence, and a complete customization system. Supported static models and placements can be recovered through the separately built SixNG helper.
 
 The archive inspector does not claim archive integrity or authenticity from a header. A local dump is not automatically recovered engine source. A 60 Hz simulation does not guarantee 60 rendered FPS with game content.
 
@@ -63,7 +63,7 @@ A local validation recovered and displayed `phoenix_mid` from `levels.rpf` with 
 
 A local investigation indexed 523,524 carving entries in `levels.rpf` and 80,406 in `packs.rpf`. These are recovery indexes, not proof of complete archive coverage. `script.rpf` yielded 1,012 XML-like script-data documents. The story script container yielded 2,309 other PSO resources and no documents accepted by that decoder. Script configuration data is not decompiled executable script code.
 
-REA identified the original executable as x86-64 PE. A workspace-local Ghidra provider is installed. Whole-executable analysis has timed out; a bounded native function produced provisional pseudocode, with calling-convention verification still in progress. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
+REA identified the original executable as x86-64 PE. A workspace-local Ghidra provider is installed. Whole-executable analysis has timed out; two bounded native functions produced generated pseudocode with the Windows calling convention verified; external code/data are absent. No game script source or editable engine source has been recovered for Sixm. Original engine files remain in the user's local dump; they are not redistributed here.
 
 The fidelity target is to preserve original recovered assets and data, with custom features in an isolated resource/server layer. Full map streaming, original behavior, distinct player characters, customization, and multiplayer remain development goals.
 
@@ -84,3 +84,11 @@ The Mac asset picker also accepts a generated `cell.json`; `Sixm --validate-cell
 A local first sample imported 19 placed instances of three real barrier models, totaling 133,976 vertices and 101,005 triangles. Placement recovery found 2,250,722 entities across 30,789 files; those counts do not establish full rendered-map coverage.
 
 For repeatable visual verification without controlling an existing launcher window, run `Sixm --snapshot-preview <model.glb-or-cell.json> --snapshot-output <preview.png>`. This renders one 1280×800 frame with a fitted camera and default lighting. It is a geometry check, not an FPS or material-fidelity benchmark.
+
+## Launcher map-sample import
+
+**Import map sample** in the native Mac launcher now runs the regional placement export, selects a 40-metre cell, converts up to six unique models, writes a static manifest and opens its preview. It shares the model importer’s progress, cancellation and single-import guard. Successful regional exports are cached; a cancelled export is retried. The cache is separate from the dump.
+
+This first sample uses a fixed RAGE XY region (`-2420,-970,-2340,-890`) verified with the inspected dump version. It is not an arbitrary-location browser or full-map conversion. A local real-dump test recovered 13 regional placement files and assembled 19 placements of three models with zero conversion failures, using about 20 MB of cache. This verifies a static scene, not gameplay or a rendered FPS target. Missing conversions are recorded and reported; no scene is opened when every conversion fails.
+
+The same native pipeline is available as `Sixm --recover-cell <Xbox-folder> --asset-work <scratch-folder>`. Selection limits are 6 unique models, 2,048 instances, 32 MB per placement document and 50,000 placement files. Model names and archive IDs are validated before invoking the helper. Windows continues to show an explicit unsupported message for this native import path.
